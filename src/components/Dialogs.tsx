@@ -6,11 +6,19 @@ type DialogProps = {
     title: string;
     closeLabel?: string;
     onClose?: () => void; // shows a close button in the corner
+    wide?: boolean;
     children: ReactNode;
 };
 
 // Stays mounted after `open` turns false until the closing animation ends.
-function Dialog({ open, title, closeLabel, onClose, children }: DialogProps) {
+function Dialog({
+    open,
+    title,
+    closeLabel,
+    onClose,
+    wide,
+    children,
+}: DialogProps) {
     const titleId = useId();
     const [shown, setShown] = useState(open);
     if (open && !shown) setShown(true);
@@ -28,7 +36,7 @@ function Dialog({ open, title, closeLabel, onClose, children }: DialogProps) {
                 !open && e.target === e.currentTarget && setShown(false)
             }
         >
-            <div className='dialog'>
+            <div className={`dialog ${wide ? 'wide' : ''}`}>
                 <h2 id={titleId}>{title}</h2>
                 {content.current}
                 {onClose && (
@@ -72,6 +80,29 @@ export function NewWordDialog({ open, onConfirm, onCancel }: NewWordProps) {
             </button>
             <button type='button' className='btn big cancel' onClick={onCancel}>
                 Отмена
+            </button>
+        </Dialog>
+    );
+}
+
+type HintProps = {
+    open: boolean;
+    gloss: string;
+    onClose: () => void;
+};
+
+export function HintDialog({ open, gloss, onClose }: HintProps) {
+    return (
+        <Dialog
+            open={open}
+            title='Найдите слово с таким толкованием'
+            closeLabel='Закрыть'
+            onClose={onClose}
+            wide
+        >
+            <p className='gloss'>{gloss}</p>
+            <button type='button' className='btn big' onClick={onClose}>
+                Понятно
             </button>
         </Dialog>
     );

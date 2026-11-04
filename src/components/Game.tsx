@@ -6,14 +6,17 @@ import {
     createGame,
     type Dictionary,
     type Game as GameState,
+    hintWait,
+    revealHint,
     score,
+    upgrade,
     type Verdict,
 } from '@/lib/game';
 import { BASE_PATH } from '@/lib/site';
 import { KEY, load, save } from '@/lib/storage';
 import { normalize, subwords } from '@/lib/words';
 import { Composer } from './Composer';
-import { NewWordDialog, WinDialog } from './Dialogs';
+import { HintDialog, NewWordDialog, WinDialog } from './Dialogs';
 import { FoundList } from './FoundList';
 import { Header, type Theme } from './Header';
 import { Source } from './Source';
@@ -28,6 +31,7 @@ export default function Game() {
     const [fresh, setFresh] = useState<string | null>(null);
     const [confirmNew, setConfirmNew] = useState(false);
     const [keepPlaying, setKeepPlaying] = useState(false); // after the win, to hunt rare words
+    const [hint, setHint] = useState<string | null>(null); // the word whose gloss the hint shows
     const onKey = useRef((_: KeyboardEvent) => {});
 
     useEffect(() => {
@@ -42,7 +46,7 @@ export default function Game() {
                 // A rebuilt dictionary may have dropped the saved word
                 setGame(
                     saved && d.sources.includes(saved.source)
-                        ? saved
+                        ? upgrade(saved)
                         : createGame(d),
                 );
                 setDict(d);
@@ -63,6 +67,21 @@ export default function Game() {
     useEffect(() => {
         if (dict) document.documentElement.dataset.theme = theme;
     }, [dict, theme]);
+
+    const running = !!game;
+    useEffect(() => {
+        if (!running) return;
+        let last = Date.now();
+        const id = setInterval(() => {
+            const now = Date.now();
+            // Cap the step so time spent asleep or in the background never counts.
+            const step = Math.min(now - last, 1500);
+            last = now;
+            if (document.visibilityState === 'visible')
+                setGame((g) => g && { ...g, elapsed: g.elapsed + step });
+        }, 1000);
+        return () => clearInterval(id);
+    }, [running]);
 
     const words = useMemo(() => (dict ? Object.keys(dict.words) : []), [dict]);
     const common = useMemo(() => new Set(dict?.common), [dict]);
@@ -129,10 +148,19 @@ export default function Game() {
         setFresh(null);
         setConfirmNew(false);
         setKeepPlaying(false);
+        setHint(null);
+    }
+
+    function onHint() {
+        const next = game && revealHint(game, answers, common);
+        if (!next) return;
+        setGame(next.game);
+        setHint(next.word);
     }
 
     onKey.current = (e) => {
-        if (confirmNew || showWin || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (confirmNew || showWin || hint || e.ctrlKey || e.metaKey || e.altKey)
+            return;
         if (e.key === 'Backspace') edit(picked.slice(0, -1));
         else if (e.key === 'Enter') onCheck();
         else {
@@ -171,6 +199,8 @@ export default function Game() {
                     onErase={() => edit(picked.slice(0, -1))}
                     onClear={() => edit([])}
                     onCheck={onCheck}
+                    hintWait={hintWait(game)}
+                    onHint={onHint}
                 />
                 <FoundList
                     found={game.found}
@@ -184,6 +214,11 @@ export default function Game() {
                 open={confirmNew}
                 onConfirm={startNew}
                 onCancel={() => setConfirmNew(false)}
+            />
+            <HintDialog
+                open={!!hint}
+                gloss={hint ? dict.words[hint] : ''}
+                onClose={() => setHint(null)}
             />
             <WinDialog
                 open={showWin}

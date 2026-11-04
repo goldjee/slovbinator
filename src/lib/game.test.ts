@@ -1,5 +1,13 @@
 import { expect, test } from 'bun:test';
-import { check, createGame, type Dictionary, score } from './game';
+import {
+    check,
+    createGame,
+    type Dictionary,
+    type Game,
+    hintWait,
+    revealHint,
+    score,
+} from './game';
 import { normalize, subwords } from './words';
 
 const dict: Dictionary = {
@@ -42,7 +50,7 @@ test('е and ё are one letter', () => {
 });
 
 test('check tells new, repeated, unknown and source words apart', () => {
-    const game = { source: 'карандаш', found: ['шар'] };
+    const game = { ...createGame(dict), source: 'карандаш', found: ['шар'] };
     expect(check(game, 'кадр', dict)).toBe('ok');
     expect(check(game, 'шар', dict)).toBe('dup');
     expect(check(game, 'наш', dict)).toBe('not');
@@ -64,4 +72,25 @@ test('score counts common and rare words apart', () => {
         rare: 1,
         rareTotal: 3,
     });
+});
+
+test('a hint names the longest common word left and starts a growing cooldown', () => {
+    const answers = subwords('карандаш', Object.keys(dict.words));
+    const common = new Set(dict.common);
+    const hint = (g: Game) => {
+        const next = revealHint(g, answers, common);
+        if (!next) throw new Error('no hint');
+        return next;
+    };
+    const game = { ...createGame(dict), source: 'карандаш', found: ['кадр'] };
+    const first = hint(game);
+    expect(first.word).toBe('каша');
+    expect(hintWait(first.game)).toBe(60_000);
+    expect(revealHint(first.game, answers, common)).toBeNull();
+    expect(hintWait(hint({ ...first.game, elapsed: 60_000 }).game)).toBe(
+        90_000,
+    );
+    expect(
+        revealHint({ ...game, found: dict.common }, answers, common),
+    ).toBeNull();
 });

@@ -199,6 +199,7 @@ a {
 .found .meaning {
     font-family: var(--font-gloss), Georgia, serif;
     font-style: italic;
+    white-space: pre-line; /* each sense on its own line */
 }
 
 .play {

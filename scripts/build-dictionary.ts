@@ -135,7 +135,7 @@ for (const [word, list] of [...glosses].sort(([a], [b]) =>
 )) {
     const top = list.slice(0, MAX_SENSES);
     words[word] =
-        top.length > 1 ? top.map((g, i) => `${i + 1}) ${g}`).join(' ') : top[0];
+        top.length > 1 ? top.map((g, i) => `${i + 1}) ${g}`).join('\n') : top[0];
 }
 
 const all = Object.keys(words).map((w) => [w, letterCounts(w)] as const);

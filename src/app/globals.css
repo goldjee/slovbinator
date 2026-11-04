@@ -288,6 +288,7 @@ a {
 
 .found header {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 12px;
     padding: 16px 20px 14px;

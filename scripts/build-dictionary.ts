@@ -6,16 +6,16 @@ import { canMake, letterCounts, normalize } from '../src/lib/words';
 const WIKTIONARY_URL =
     'https://kaikki.org/ruwiktionary/raw-wiktextract-data.jsonl.gz';
 const CACHE_DIR = `${import.meta.dir}/../.cache`;
-// Word frequencies from OpenSubtitles (CC BY-SA): picks source words people actually use
-const FREQ_URL =
-    'https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/ru/ru_50k.txt';
+// Lemma frequencies by part of speech: Ляшевская О. Н., Шаров С. А. Частотный словарь современного русского языка (на материалах НКРЯ). М., 2009. http://dict.ruslang.ru/freq.php
+const FREQ_URL = 'http://dict.ruslang.ru/Freq2011.zip';
 const OUT = `${import.meta.dir}/../public/dictionary.json`;
 
 const MAX_LEN = 13;
 const MIN_SOURCE_LEN = 7;
-const MIN_SUBWORDS = 20; // fewer is no fun
 const MAX_SENSES = 2;
-const SOURCE_RANK = 20000; // a source word must be among this many most frequent words
+const COMMON_IPM = 2; // a noun used this many times per million words is common; the player must find all common words
+const SOURCE_IPM = 10; // source words are well known nouns
+const MIN_COMMON = 10; // fewer common words to find is no fun
 
 const WORD = /^[а-яё]+$/; // lowercase only: proper names are capitalised
 const BAD_ENTRY =
@@ -31,6 +31,8 @@ const BAD_TAG = new Set([
 ]);
 const BAD_LABEL =
     /^(жарг|прост|диал|обл|бран|груб|вульг|сленг|мол|интернет|пренебр|презр|ирон)\./;
+
+const LABELS_ONLY = /^([а-яё-]+\.[\s;]*)+$/;
 
 type Sense = { glosses?: string[]; tags?: string[]; categories?: string[] };
 type Entry = {
@@ -69,12 +71,20 @@ async function cached(url: string) {
     return path;
 }
 
-const frequent = new Set(
-    (await Bun.file(await cached(FREQ_URL)).text())
-        .split('\n')
-        .slice(0, SOURCE_RANK)
-        .map((l) => normalize(l.split(' ')[0])),
-);
+// Noun frequency in ipm; a pronoun or particle spelled like a noun (он, ли) has none
+const ipm = new Map<string, number>();
+const freqDir = `${CACHE_DIR}/freq2011`;
+await Bun.$`unzip -o -q ${await cached(FREQ_URL)} -d ${freqDir}`;
+for (const line of (await Bun.file(`${freqDir}/freqrnc2011.csv`).text()).split(
+    '\n',
+)) {
+    const [lemma, pos, freq] = line.split('\t');
+    if (pos !== 's') continue;
+    const word = normalize(lemma);
+    ipm.set(word, Math.max(ipm.get(word) ?? 0, Number(freq)));
+}
+const isCommon = (word: string, min = COMMON_IPM) =>
+    (ipm.get(word) ?? 0) >= min;
 
 const glosses = new Map<string, string[]>();
 const heard = new Set<string>(); // words whose senses already start with a pronounced (common) homonym
@@ -96,8 +106,20 @@ for await (const line of lines(await cached(WIKTIONARY_URL))) {
                 !s.tags?.some((t) => BAD_TAG.has(t)) &&
                 !s.categories?.some((c) => BAD_SENSE.test(c)),
         )
-        .map((s) => (s.glosses?.at(-1) ?? '').replace(/ ?\[\d+\]/g, '').trim())
-        .filter((g) => g && !BAD_LABEL.test(g));
+        .map((s) =>
+            (s.glosses ?? [])
+                .join(' ')
+                .replace(/ ?\[\d+\]/g, '')
+                .trim(),
+        )
+        // A sub-sense carries its parents' glosses; one ending in ':' only heads sub-senses that follow; a label alone (разг.) has no meaning in it
+        .filter(
+            (g) =>
+                g &&
+                !g.endsWith(':') &&
+                !BAD_LABEL.test(g) &&
+                !LABELS_ONLY.test(g),
+        );
     if (!good.length) continue;
 
     // Homonyms merge (лён and лен are one word here). The first one with a recorded pronunciation is the common one, so it goes first.
@@ -119,19 +141,22 @@ for (const [word, list] of [...glosses].sort(([a], [b]) =>
 const all = Object.keys(words).map((w) => [w, letterCounts(w)] as const);
 const playable = new Set<string>(); // a word no source can make never shows up in a game
 const sources = Object.keys(words).filter((source) => {
-    if (source.length < MIN_SOURCE_LEN || !frequent.has(source)) return false;
+    if (source.length < MIN_SOURCE_LEN || !isCommon(source, SOURCE_IPM))
+        return false;
     const counts = letterCounts(source);
     const found = all
         .filter(([w, c]) => w !== source && canMake(c, counts))
         .map(([w]) => w);
-    if (found.length < MIN_SUBWORDS) return false;
+    if (found.filter((w) => isCommon(w)).length < MIN_COMMON) return false;
     for (const w of found) playable.add(w);
     playable.add(source);
     return true;
 });
 for (const w of Object.keys(words)) if (!playable.has(w)) delete words[w];
 
-await Bun.write(OUT, JSON.stringify({ sources, words }));
+const common = Object.keys(words).filter((w) => isCommon(w));
+
+await Bun.write(OUT, JSON.stringify({ sources, common, words }));
 console.log(
-    `${Object.keys(words).length} words, ${sources.length} source words → ${OUT} (${(Bun.file(OUT).size / 1e6).toFixed(1)} MB)`,
+    `${Object.keys(words).length} words (${common.length} common), ${sources.length} source words → ${OUT} (${(Bun.file(OUT).size / 1e6).toFixed(1)} MB)`,
 );

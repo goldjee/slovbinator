@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test';
-import { check, createGame, type Dictionary } from './game';
+import { check, createGame, type Dictionary, score } from './game';
 import { normalize, subwords } from './words';
 
 const dict: Dictionary = {
     sources: ['карандаш', 'приключение'],
+    common: ['кадр', 'шар', 'каша'],
     words: {
         карандаш: '',
         приключение: '',
@@ -52,4 +53,15 @@ test('check tells new, repeated, unknown and source words apart', () => {
 test('a new game picks a different source word', () => {
     for (let i = 0; i < 20; i++)
         expect(createGame(dict, 'карандаш').source).toBe('приключение');
+});
+
+test('score counts common and rare words apart', () => {
+    const answers = subwords('карандаш', Object.keys(dict.words));
+    const common = new Set(dict.common);
+    expect(score(['шар', 'дар'], answers, common)).toEqual({
+        common: 1,
+        commonTotal: 3,
+        rare: 1,
+        rareTotal: 3,
+    });
 });

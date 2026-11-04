@@ -1,4 +1,5 @@
 import { type ReactNode, useId, useRef, useState } from 'react';
+import type { Score } from '@/lib/game';
 
 type DialogProps = {
     open: boolean;
@@ -78,19 +79,26 @@ export function NewWordDialog({ open, onConfirm, onCancel }: NewWordProps) {
 
 type WinProps = {
     open: boolean;
-    source: string;
+    score: Score;
     onNewWord: () => void;
+    onKeepPlaying: () => void;
 };
 
-export function WinDialog({ open, source, onNewWord }: WinProps) {
+export function WinDialog({ open, score, onNewWord, onKeepPlaying }: WinProps) {
     return (
-        <Dialog open={open} title='Все слова найдены!'>
+        <Dialog open={open} title='Все обычные слова найдены!'>
             <p>
-                Вы нашли все слова, которые прячутся в слове «
-                {source.toUpperCase()}»
+                Редких слов найдено {score.rare} из {score.rareTotal}
             </p>
             <button type='button' className='btn big' onClick={onNewWord}>
                 Новое слово
+            </button>
+            <button
+                type='button'
+                className='btn big cancel'
+                onClick={onKeepPlaying}
+            >
+                Искать редкие
             </button>
         </Dialog>
     );

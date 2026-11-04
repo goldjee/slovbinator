@@ -6,6 +6,7 @@ import {
     createGame,
     type Dictionary,
     type Game as GameState,
+    score,
     type Verdict,
 } from '@/lib/game';
 import { BASE_PATH } from '@/lib/site';
@@ -26,6 +27,7 @@ export default function Game() {
     const [verdict, setVerdict] = useState<Verdict | null>(null);
     const [fresh, setFresh] = useState<string | null>(null);
     const [confirmNew, setConfirmNew] = useState(false);
+    const [keepPlaying, setKeepPlaying] = useState(false); // after the win, to hunt rare words
     const onKey = useRef((_: KeyboardEvent) => {});
 
     useEffect(() => {
@@ -63,9 +65,10 @@ export default function Game() {
     }, [dict, theme]);
 
     const words = useMemo(() => (dict ? Object.keys(dict.words) : []), [dict]);
+    const common = useMemo(() => new Set(dict?.common), [dict]);
     const source = game?.source;
-    const total = useMemo(
-        () => (source ? subwords(source, words).length : 0),
+    const answers = useMemo(
+        () => (source ? subwords(source, words) : []),
         [source, words],
     );
 
@@ -92,7 +95,9 @@ export default function Game() {
         );
 
     const typed = picked.map((i) => game.source[i]).join('');
-    const won = game.found.length === total;
+    const points = score(game.found, answers, common);
+    const won = points.common === points.commonTotal;
+    const showWin = won && !keepPlaying;
 
     function pick(i: number) {
         setPicked([...picked, i]);
@@ -123,10 +128,11 @@ export default function Game() {
         setVerdict(null);
         setFresh(null);
         setConfirmNew(false);
+        setKeepPlaying(false);
     }
 
     onKey.current = (e) => {
-        if (confirmNew || won || e.ctrlKey || e.metaKey || e.altKey) return;
+        if (confirmNew || showWin || e.ctrlKey || e.metaKey || e.altKey) return;
         if (e.key === 'Backspace') edit(picked.slice(0, -1));
         else if (e.key === 'Enter') onCheck();
         else {
@@ -169,7 +175,8 @@ export default function Game() {
                 <FoundList
                     found={game.found}
                     words={dict.words}
-                    total={total}
+                    common={common}
+                    score={points}
                     fresh={fresh}
                 />
             </div>
@@ -178,7 +185,12 @@ export default function Game() {
                 onConfirm={startNew}
                 onCancel={() => setConfirmNew(false)}
             />
-            <WinDialog open={won} source={game.source} onNewWord={startNew} />
+            <WinDialog
+                open={showWin}
+                score={points}
+                onNewWord={startNew}
+                onKeepPlaying={() => setKeepPlaying(true)}
+            />
         </main>
     );
 }

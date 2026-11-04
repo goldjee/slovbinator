@@ -1,13 +1,15 @@
 import { useEffect, useRef } from 'react';
+import type { Score } from '@/lib/game';
 
 type Props = {
     found: string[];
     words: Record<string, string>;
-    total: number;
+    common: Set<string>;
+    score: Score;
     fresh: string | null; // just found, or found again: highlighted and scrolled to
 };
 
-export function FoundList({ found, words, total, fresh }: Props) {
+export function FoundList({ found, words, common, score, fresh }: Props) {
     const list = useRef<HTMLUListElement>(null);
 
     useEffect(() => {
@@ -22,7 +24,8 @@ export function FoundList({ found, words, total, fresh }: Props) {
             <header>
                 <h2 id='found-title'>Найденные слова</h2>
                 <span className='count'>
-                    найдено {found.length} из {total}
+                    найдено {found.length} ({score.common}/{score.commonTotal}{' '}
+                    обычных, {score.rare}/{score.rareTotal} редких)
                 </span>
             </header>
             <ul ref={list}>
@@ -37,7 +40,9 @@ export function FoundList({ found, words, total, fresh }: Props) {
                         data-word={word}
                         className={word === fresh ? 'fresh' : ''}
                     >
-                        <div className='word'>{word}</div>
+                        <div className='word'>
+                            {common.has(word) ? word : `${word} *`}
+                        </div>
                         <div className='meaning'>{words[word]}</div>
                     </li>
                 ))}

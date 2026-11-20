@@ -220,6 +220,7 @@ a {
 /* The word being made, handwritten on a ruled line */
 .typed {
     height: 88px;
+    flex-shrink: 0; /* overflow: hidden lets it shrink when a long gloss leaves the composer short, cutting off the word */
     display: flex;
     align-items: flex-end;
     padding: 0 8px 10px;
